@@ -28,35 +28,6 @@ class LoginFrame(Tkinter.Frame):
         Tkinter.Frame.__init__(self, master)
         self.loginButton = Tkinter.Button(self, text=u'登录', width=25, height=3, command=self.login)
         self.loginButton.grid(row=0, column=0, padx=150, pady=155)
-        self.headers = {
-            'Accept': '*/*', 'Accept-Encoding': 'gzip, deflate, br', 'Pragma': 'no-cache',
-            'Accept-Language': 'zh-CN,zh;q=0.8,en;q=0.6', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive',
-            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/60.0.3112.113 Chrome/60.0.3112.113 Safari/537.36'
-        }
-        self.master.session = Session()
-        self.master.session.headers.update(self.headers)
-        self.master.cookies = {}
-        self.master.driver_cookies = {}
-        self.master.cut = '**********************************************************'
-
-    def get_driver_by_phantomjs(self):
-        self.master.log_frame.show_log(u'初始化浏览器驱动...')
-        desired_capabilities = {'phantomjs.page.settings.loadImages': False,
-                                'phantomjs.page.settings.userAgent': self.headers.get('User-Agent')}
-        for key, value in self.headers.items():
-            desired_capabilities['phantomjs.page.customHeaders.%s' % key] = value
-        for i in range(3):
-            try:
-                driver = webdriver.PhantomJS(desired_capabilities=desired_capabilities,
-                                             service_log_path='/dev/null')
-                break
-            except Exception:
-                pass
-            if i == 2:
-                tkMessageBox.showinfo(u'提示', u'初始化浏览器驱动失败')
-                return
-        self.master.log_frame.show_log(u'初始化浏览器驱动成功')
-        return driver
 
     def login_baidu(self, user, password):
         self.master.driver.delete_all_cookies()
@@ -141,7 +112,7 @@ class LoginFrame(Tkinter.Frame):
                         pass
                 if not login_ok:
                     if not has_driver:
-                        self.master.driver = self.get_driver_by_phantomjs()
+                        self.master.driver = self.master.get_driver_by_phantomjs()
                         has_driver = True
                         if not self.master.driver:
                             break
@@ -395,11 +366,12 @@ class SendFrame(Tkinter.Frame):
         self.master.log_frame.pack()
         self.master.log_frame.show_log(self.master.cut)
         try:
-            self.master.driver = self.get_driver_by_phantomjs()
+            self.master.driver = self.master.get_driver_by_phantomjs()
             if not self.master.driver:
                 self.master.log_frame.pack_forget()
                 self.pack()
                 return
+            self.master.driver.get('https://tieba.baidu.com/index.html')
             for username, cookies in self.master.cookies.items():
                 self.master.log_frame.show_log(u'帐号"%s"正在发贴...' % username)
                 self.master.session.cookies = cookies
@@ -412,7 +384,7 @@ class SendFrame(Tkinter.Frame):
                 for tiebainfo in tiebainfos:
                     send_content = content
                     self.master.driver.get(tieba_url % urlencode({'kw': tiebainfo[0].decode('gbk').encode('utf-8')}))
-                    while not self.master.driver.find_element_by_css_selector('#audio_player_core'):
+                    while not self.master.driver.find_elements_by_css_selector('#com_userbar_message'):
                         time.sleep(0.1)
                     if img_path:
                         # 上传图片
@@ -491,10 +463,19 @@ class App(Tkinter.Tk):
         self.send_frame = SendFrame()
         self.log_frame = LogFrame()
 
+        self.headers = {
+            'Accept': '*/*', 'Accept-Encoding': 'gzip, deflate, br', 'Pragma': 'no-cache',
+            'Accept-Language': 'zh-CN,zh;q=0.8,en;q=0.6', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive',
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/60.0.3112.113 Chrome/60.0.3112.113 Safari/537.36'}
+        self.session = Session()
+        self.session.headers.update(self.headers)
+        self.cookies = {}
+        self.driver_cookies = {}
+        self.cut = '**********************************************************'
+
         self.withdraw()
         self.title(u'登录')
         self.login_fram.pack()
-
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight() - 100
         self.resizable(False, False)
@@ -504,6 +485,23 @@ class App(Tkinter.Tk):
             (screen_width - self.winfo_reqwidth()) / 2,
             (screen_height - self.winfo_reqheight()) / 2))
         self.deiconify()
+
+    def get_driver_by_phantomjs(self):
+            self.log_frame.show_log(u'初始化浏览器驱动...')
+            desired_capabilities = {'phantomjs.page.settings.loadImages': False,
+                                    'phantomjs.page.settings.userAgent': self.headers.get('User-Agent')}
+            for i in range(3):
+                try:
+                    driver = webdriver.PhantomJS(desired_capabilities=desired_capabilities,
+                                                 service_log_path='/dev/null')
+                    break
+                except Exception:
+                    pass
+                if i == 2:
+                    tkMessageBox.showinfo(u'提示', u'初始化浏览器驱动失败')
+                    return
+            self.log_frame.show_log(u'初始化浏览器驱动成功')
+            return driver
 
 
 app = App()
