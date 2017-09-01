@@ -44,13 +44,16 @@ class LoginFrame(Tkinter.Frame):
                                 'phantomjs.page.settings.userAgent': self.headers.get('User-Agent')}
         for key, value in self.headers.items():
             desired_capabilities['phantomjs.page.customHeaders.%s' % key] = value
-        while True:
+        for i in range(3):
             try:
                 driver = webdriver.PhantomJS(desired_capabilities=desired_capabilities,
                                              service_log_path='/dev/null')
                 break
             except Exception:
                 pass
+            if i == 2:
+                tkMessageBox.showinfo(u'提示', u'初始化浏览器驱动失败')
+                return
         self.master.log_frame.show_log(u'初始化浏览器驱动成功')
         return driver
 
@@ -60,7 +63,11 @@ class LoginFrame(Tkinter.Frame):
         login_button = self.master.driver.find_element_by_xpath('//li[@class="u_login"]//a[contains(text(), "登录")]')
         login_button.click()
         user_data = self.master.driver.find_elements_by_xpath('//div[@id="FP_USERDATA"]')
-        while not user_data:
+        for i in range(100):
+            if user_data:
+                break
+            elif i == 99:
+                return
             time.sleep(0.1)
             user_data = self.master.driver.find_elements_by_xpath('//div[@id="FP_USERDATA"]')
         username_input = self.master.driver.find_element_by_xpath('//input[@id="TANGRAM__PSP_10__userName"]')
@@ -68,16 +75,22 @@ class LoginFrame(Tkinter.Frame):
         login_input = self.master.driver.find_element_by_xpath('//input[@id="TANGRAM__PSP_10__submit"]')
         username_input.send_keys(user)
         password_input.send_keys(password)
-        try:
-            login_input.click()
-        except Exception:
-            pass
+        for i in range(3):
+            try:
+                login_input.click()
+                break
+            except Exception:
+                pass
         if self.master.driver.get_cookie('BDUSS'):
-            while not self.master.driver.get_cookie('STOKEN'):
+            for i in range(100):
+                if self.master.driver.get_cookie('STOKEN'):
+                    break
+                elif i == 99:
+                    return
                 time.sleep(0.1)
             return self.master.driver.get_cookies()
         else:
-            return None
+            return
 
     def login(self):
         config_file_path = os.path.join(os.path.abspath(os.path.curdir), 'users_info.json')
@@ -127,6 +140,8 @@ class LoginFrame(Tkinter.Frame):
                 if not login_ok:
                     if not has_driver:
                         self.master.driver = self.get_driver_by_phantomjs()
+                        if not self.master.driver:
+                            break
                         has_driver = True
                     try:
                         cookies = self.login_baidu(username, keys[0])
@@ -150,7 +165,10 @@ class LoginFrame(Tkinter.Frame):
                         raise
                 msg = (u'%s登录' % username) + (u'成功\n' if login_ok else u'失败\n')
                 self.master.log_frame.show_log(msg)
-            if self.master.cookies:
+            if not self.master.driver:
+                self.master.log_frame.pack_forget()
+                self.pack()
+            elif self.master.cookies:
                 tkMessageBox.showinfo(u'提示', u'登录完成')
                 self.master.log_frame.pack_forget()
                 self.master.main_fram.pack()
@@ -199,8 +217,11 @@ class MainFrame(Tkinter.Frame):
                 tiebainfos = re.findall(r'<tr.*?title="(.*?)".*?tbs="(.*?)".*?</tr>', table, re.DOTALL)
                 for tiebainfo in tiebainfos:
                     data = {'ie': 'utf-8', 'kw': tiebainfo[0].decode('gbk').encode('utf-8'), 'tbs': tiebainfo[1]}
-                    resp = self.master.session.post(sign_url, data=urlencode(data))
-                    result_code = resp.json().get('no')
+                    for i in range(3):
+                        resp = self.master.session.post(sign_url, data=urlencode(data))
+                        result_code = resp.json().get('no')
+                        if result_code in [0, 1101]:
+                            break
                     msg = u'帐号"%s"在%s吧签到' % (username, tiebainfo[0].decode('gbk'))
                     msg += u'成功\n' if result_code in [0, 1101] else u'失败\n'
                     self.master.log_frame.show_log(msg)
@@ -274,8 +295,11 @@ class FllowFrame(Tkinter.Frame):
                     uid = re.search(r'PageData\.user.*?name_url[\'"]:\s*?"(.*?)"', resp.content, re.DOTALL).group(1)
                     tbs = re.search(r'PageData[\s=]+?{.*?tbs[\'"]:\s*?"(.*?)"', resp.content, re.DOTALL).group(1)
                     data = {'fid': fid, 'fname': tiebaname.encode('utf-8'), 'uid': uid, 'ie': 'gbk', 'tbs': tbs}
-                    resp = self.master.session.post(fllow_url, data=urlencode(data))
-                    result_code = resp.json().get('no')
+                    for i in range(3):
+                        resp = self.master.session.post(fllow_url, data=urlencode(data))
+                        result_code = resp.json().get('no')
+                        if result_code in [0, 221]:
+                            break
                     msg = u'帐号"%s"关注%s吧' % (username, tiebaname)
                     msg += u'成功\n' if result_code in [0, 221] else u'失败\n'
                     self.master.log_frame.show_log(msg)
@@ -364,6 +388,10 @@ class SendFrame(Tkinter.Frame):
         self.pack_forget()
         self.master.log_frame.pack()
         self.master.driver = self.get_driver_by_phantomjs()
+        if not self.master.driver:
+            self.master.log_frame.pack_forget()
+            self.pack()
+            return
         try:
             for username, cookies in self.master.cookies.items():
                 self.master.session.cookies = cookies
