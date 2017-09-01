@@ -37,6 +37,7 @@ class LoginFrame(Tkinter.Frame):
         self.master.session.headers.update(self.headers)
         self.master.cookies = {}
         self.master.driver_cookies = {}
+        self.master.cut = '**********************************************************'
 
     def get_driver_by_phantomjs(self):
         self.master.log_frame.show_log(u'初始化浏览器驱动...')
@@ -113,9 +114,10 @@ class LoginFrame(Tkinter.Frame):
         self.master.update()
         user_info_url = 'https://tieba.baidu.com/f/user/json_userinfo?_=%s'
         has_driver = False
+        self.master.log_frame.show_log(self.master.cut)
         try:
             for username, keys in users_info.items():
-                self.master.log_frame.show_log(u'%s正在登录...' % username)
+                self.master.log_frame.show_log(u'帐号"%s"正在登录...' % username)
                 login_ok = False
                 if len(keys) > 1:
                     try:
@@ -140,9 +142,9 @@ class LoginFrame(Tkinter.Frame):
                 if not login_ok:
                     if not has_driver:
                         self.master.driver = self.get_driver_by_phantomjs()
+                        has_driver = True
                         if not self.master.driver:
                             break
-                        has_driver = True
                     try:
                         cookies = self.login_baidu(username, keys[0])
                         if cookies:
@@ -163,9 +165,9 @@ class LoginFrame(Tkinter.Frame):
                             login_ok = True
                     except Exception:
                         raise
-                msg = (u'%s登录' % username) + (u'成功\n' if login_ok else u'失败\n')
+                msg = (u'帐号"%s"登录' % username) + (u'成功' if login_ok else u'失败')
                 self.master.log_frame.show_log(msg)
-            if not self.master.driver:
+            if has_driver and not self.master.driver:
                 self.master.log_frame.pack_forget()
                 self.pack()
             elif self.master.cookies:
@@ -182,7 +184,7 @@ class LoginFrame(Tkinter.Frame):
             self.pack()
         self.master.log_frame.backButton.configure(state='normal')
         config_file.close()
-        if has_driver:
+        if has_driver and self.master.driver:
             self.master.driver.quit()
 
 
@@ -209,8 +211,10 @@ class MainFrame(Tkinter.Frame):
         self.master.log_frame.pack()
         get_tiebas_url = 'http://tieba.baidu.com/f/like/mylike?v=%s'
         sign_url = 'https://tieba.baidu.com/sign/add'
+        self.master.log_frame.show_log(self.master.cut)
         try:
             for username, cookies in self.master.cookies.items():
+                self.master.log_frame.show_log(u'帐号"%s"正在签到...' % username)
                 self.master.session.cookies = cookies
                 resp = self.master.session.get(get_tiebas_url % int(time.time() * 1000))
                 table = re.search(r'<table.*?</table>', resp.content, re.DOTALL).group()
@@ -222,10 +226,10 @@ class MainFrame(Tkinter.Frame):
                         result_code = resp.json().get('no')
                         if result_code in [0, 1101]:
                             break
-                    msg = u'帐号"%s"在%s吧签到' % (username, tiebainfo[0].decode('gbk'))
-                    msg += u'成功\n' if result_code in [0, 1101] else u'失败\n'
+                    msg = u'帐号"%s"在"%s"吧签到' % (username, tiebainfo[0].decode('gbk'))
+                    msg += u'成功' if result_code in [0, 1101, 1102] else (u'失败: %s' % result_code)
                     self.master.log_frame.show_log(msg)
-                msg = u'帐号"%s"签到完成\n' % username
+                msg = u'帐号"%s"签到完成' % username
                 self.master.log_frame.show_log(msg)
             tkMessageBox.showinfo(u'提示', u'签到完成')
         except Exception as e:
@@ -278,8 +282,10 @@ class FllowFrame(Tkinter.Frame):
         fllow_url = 'https://tieba.baidu.com/f/like/commit/add'
         self.pack_forget()
         self.master.log_frame.pack()
+        self.master.log_frame.show_log(self.master.cut)
         try:
             for username, cookies in self.master.cookies.items():
+                self.master.log_frame.show_log(u'帐号"%s"正在关注...' % username)
                 self.master.session.cookies = cookies
                 for tiebaname in tiebanames:
                     resp = self.master.session.get(tieba_url % urlencode({'kw': tiebaname.encode('utf-8')}))
@@ -288,7 +294,7 @@ class FllowFrame(Tkinter.Frame):
                     real_name = eval('u\'%s\'' % real_name)
                     if real_name != tiebaname:
                         tiebanames.pop(tiebaname)
-                        msg = u'%s吧不存在' % tiebaname
+                        msg = u'"%s"吧不存在' % tiebaname
                         self.master.log_frame.show_log(msg)
                         continue
                     fid = re.search(r'PageData\.forum.*?id[\'"]:\s*?(\d+?)\D', resp.content, re.DOTALL).group(1)
@@ -300,10 +306,10 @@ class FllowFrame(Tkinter.Frame):
                         result_code = resp.json().get('no')
                         if result_code in [0, 221]:
                             break
-                    msg = u'帐号"%s"关注%s吧' % (username, tiebaname)
-                    msg += u'成功\n' if result_code in [0, 221] else u'失败\n'
+                    msg = u'帐号"%s"关注"%s"吧' % (username, tiebaname)
+                    msg += u'成功' if result_code in [0, 221] else (u'失败: %s' % result_code)
                     self.master.log_frame.show_log(msg)
-                msg = u'帐号"%s"关注完成\n' % username
+                msg = u'帐号"%s"关注完成' % username
                 self.master.log_frame.show_log(msg)
             tkMessageBox.showinfo(u'提示', u'关注完成')
         except Exception as e:
@@ -387,13 +393,15 @@ class SendFrame(Tkinter.Frame):
         tieba_url = 'https://tieba.baidu.com/f?%s'
         self.pack_forget()
         self.master.log_frame.pack()
-        self.master.driver = self.get_driver_by_phantomjs()
-        if not self.master.driver:
-            self.master.log_frame.pack_forget()
-            self.pack()
-            return
+        self.master.log_frame.show_log(self.master.cut)
         try:
+            self.master.driver = self.get_driver_by_phantomjs()
+            if not self.master.driver:
+                self.master.log_frame.pack_forget()
+                self.pack()
+                return
             for username, cookies in self.master.cookies.items():
+                self.master.log_frame.show_log(u'帐号"%s"正在发贴...' % username)
                 self.master.session.cookies = cookies
                 self.master.driver.delete_all_cookies()
                 for cookie in self.master.driver_cookies.get(username):
@@ -442,10 +450,10 @@ class SendFrame(Tkinter.Frame):
                     content_input.click()
                     self.master.driver.execute_script('$("#ueditor_replace").html("%s")' % send_content)
                     send_buttom.click()
-                    msg = u'帐号"%s"在%s吧发贴完成' % (username, tiebainfo[0].decode('gbk'))
+                    msg = u'帐号"%s"在"%s"吧发贴完成' % (username, tiebainfo[0].decode('gbk'))
                     self.master.log_frame.show_log(msg)
                     break
-                msg = u'帐号"%s"发贴完成\n' % username
+                msg = u'帐号"%s"发贴完成' % username
                 self.master.log_frame.show_log(msg)
             tkMessageBox.showinfo(u'提示', u'发贴完成')
         except Exception as e:
@@ -464,7 +472,7 @@ class LogFrame(Tkinter.Frame):
 
     def show_log(self, msg):
         self.text.configure(state='normal')
-        self.text.insert(Tkinter.END, msg)
+        self.text.insert(Tkinter.END, msg + '\n')
         self.text.see(Tkinter.END)
         self.text.configure(state='disabled')
         self.master.update()
