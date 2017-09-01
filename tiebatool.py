@@ -39,6 +39,7 @@ class LoginFrame(Tkinter.Frame):
         self.master.driver_cookies = {}
 
     def get_driver_by_phantomjs(self):
+        self.master.log_frame.show_log(u'初始化浏览器驱动...')
         desired_capabilities = {'phantomjs.page.settings.loadImages': False,
                                 'phantomjs.page.settings.userAgent': self.headers.get('User-Agent')}
         for key, value in self.headers.items():
@@ -50,6 +51,7 @@ class LoginFrame(Tkinter.Frame):
                 break
             except Exception:
                 pass
+        self.master.log_frame.show_log(u'初始化浏览器驱动成功')
         return driver
 
     def login_baidu(self, user, password):
@@ -57,22 +59,19 @@ class LoginFrame(Tkinter.Frame):
         self.master.driver.get('https://tieba.baidu.com/index.html')
         login_button = self.master.driver.find_element_by_xpath('//li[@class="u_login"]//a[contains(text(), "登录")]')
         login_button.click()
-        login_form = self.master.driver.find_elements_by_xpath('//div[@id="passport-login-pop"]')
-        while not login_form:
+        user_data = self.master.driver.find_elements_by_xpath('//div[@id="FP_USERDATA"]')
+        while not user_data:
             time.sleep(0.1)
-            login_form = self.master.driver.find_elements_by_xpath('//div[@id="passport-login-pop"]')
-        username_input = self.master.driver.find_elements_by_xpath('//input[@id="TANGRAM__PSP_10__userName"]')
-        while not username_input:
-            time.sleep(0.1)
-            username_input = self.master.driver.find_elements_by_xpath('//input[@id="TANGRAM__PSP_10__userName"]')
+            user_data = self.master.driver.find_elements_by_xpath('//div[@id="FP_USERDATA"]')
+        username_input = self.master.driver.find_element_by_xpath('//input[@id="TANGRAM__PSP_10__userName"]')
         password_input = self.master.driver.find_element_by_xpath('//input[@id="TANGRAM__PSP_10__password"]')
         login_input = self.master.driver.find_element_by_xpath('//input[@id="TANGRAM__PSP_10__submit"]')
-        dv_input = self.master.driver.find_element_by_xpath('//input[@id="dv_Input"]')
-        username_input[0].send_keys(user)
+        username_input.send_keys(user)
         password_input.send_keys(password)
-        while not dv_input.get_attribute('value'):
-            time.sleep(0.1)
-        login_input.click()
+        try:
+            login_input.click()
+        except Exception:
+            pass
         if self.master.driver.get_cookie('BDUSS'):
             while not self.master.driver.get_cookie('STOKEN'):
                 time.sleep(0.1)
@@ -103,6 +102,7 @@ class LoginFrame(Tkinter.Frame):
         has_driver = False
         try:
             for username, keys in users_info.items():
+                self.master.log_frame.show_log(u'%s正在登录...' % username)
                 login_ok = False
                 if len(keys) > 1:
                     try:
