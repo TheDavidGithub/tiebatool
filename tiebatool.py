@@ -178,24 +178,21 @@ class MainFrame(Tkinter.Frame):
         self.pack_forget()
         self.master.title(u'自动签到')
         self.master.log_frame.pack()
-        get_tiebas_url = 'http://tieba.baidu.com/f/like/mylike?v=%s'
         sign_url = 'https://tieba.baidu.com/sign/add'
         self.master.log_frame.show_log(self.master.cut)
         try:
             for username, cookies in self.master.cookies.items():
                 self.master.log_frame.show_log(u'帐号"%s"正在签到...' % username)
                 self.master.session.cookies._cookies = cookies
-                resp = self.master.session.get(get_tiebas_url % int(time.time() * 1000))
-                table = re.search(r'<table.*?</table>', resp.content, re.DOTALL).group()
-                tiebainfos = re.findall(r'<tr.*?title="(.*?)".*?tbs="(.*?)".*?</tr>', table, re.DOTALL)
+                tiebainfos = self.master.get_tieba_info()
                 for tiebainfo in tiebainfos:
-                    data = {'ie': 'utf-8', 'kw': tiebainfo[0].decode('gbk').encode('utf-8'), 'tbs': tiebainfo[1]}
+                    data = {'ie': 'utf-8', 'kw': tiebainfo[0], 'tbs': tiebainfo[2]}
                     for i in range(3):
                         resp = self.master.session.post(sign_url, data=urlencode(data))
                         result_code = resp.json().get('no')
                         if result_code in [0, 1101]:
                             break
-                    msg = u'帐号"%s"在"%s"吧签到' % (username, tiebainfo[0].decode('gbk'))
+                    msg = u'帐号"%s"在"%s"吧签到' % (username, tiebainfo[0].decode('utf-8'))
                     msg += u'成功' if result_code in [0, 1101, 1102] else (u'失败: %s' % result_code)
                     self.master.log_frame.show_log(msg)
                 msg = u'帐号"%s"签到完成' % username
@@ -355,7 +352,6 @@ class SendFrame(Tkinter.Frame):
                 self.tieziimageInput.focus()
                 return
         content = content.replace('\n', '[br]')
-        get_tiebas_url = 'http://tieba.baidu.com/f/like/mylike?v=%s'
         img_tbs_url = 'https://tieba.baidu.com/dc/common/imgtbs'
         upload_image = 'https://uploadphotos.baidu.com/upload/pic?%s'
         img_tab = '[img pic_type=0 width=%s height=%s]%s[/img]'
@@ -382,18 +378,14 @@ class SendFrame(Tkinter.Frame):
             for username, cookies in self.master.cookies.items():
                 self.master.log_frame.show_log(u'获取帐号"%s"贴吧信息...' % username)
                 self.master.session.cookies._cookies = cookies
-                resp = self.master.session.get(get_tiebas_url % int(time.time() * 1000))
-                table = re.search(r'<table.*?</table>', resp.content, re.DOTALL).group()
-                tiebainfos = re.findall(r'<tr.*?title="(.*?)".*?balvid="(\d*?)".*?tbs="(.*?)".*?</tr>', table, re.DOTALL)
+                tiebainfos = self.master.get_tieba_info()
                 for tiebainfo in tiebainfos:
-                    tiebainfo = list(tiebainfo)
-                    tiebainfo[0] = tiebainfo[0].decode('gbk')
                     if tiebainfo[0] not in requests_info:
                         requests_info[tiebainfo[0]] = []
                     requests_info[tiebainfo[0]].append([username, copy.deepcopy(cookies), tiebainfo])
                 self.master.log_frame.show_log(u'获取帐号"%s"贴吧信息完成' % username)
             for tieba_name, request_info in requests_info.items():
-                self.master.log_frame.show_log(u'正在"%s"吧发贴...' % tieba_name)
+                self.master.log_frame.show_log(u'正在"%s"吧发贴...' % tieba_name.decode('utf-8'))
                 for request in request_info:
                     username, cookies, tiebainfo = request
                     self.master.session.cookies._cookies = cookies
@@ -428,7 +420,7 @@ class SendFrame(Tkinter.Frame):
                         send_content = send_content.replace('[img]', img_tab % (width, height, image_url))
                     time_stamp = str(int(time.time() * 1000))
                     data = {
-                        'ie': 'utf-8', 'kw': tiebainfo[0].encode('utf-8'), 'fid': tiebainfo[1], 'tid': '0',
+                        'ie': 'utf-8', 'kw': tiebainfo[0], 'fid': tiebainfo[1], 'tid': '0',
                         'vcode_md5': '', 'floor_num': '0', 'rich_text': '1', 'tbs': tiebainfo[2], 'prefix': '',
                         'content': send_content.encode('utf-8'), 'basilisk': '1', 'title': title.encode('utf-8'),
                         'files': '[]', 'mouse_pwd': mouse_pwd % time_stamp, 'mouse_pwd_t': time_stamp,
@@ -438,10 +430,10 @@ class SendFrame(Tkinter.Frame):
                         result_code = resp.json().get('no')
                         if result_code == 0:
                             break
-                    msg = u'帐号"%s"在"%s"吧发贴' % (username, tiebainfo[0])
+                    msg = u'帐号"%s"在"%s"吧发贴' % (username, tiebainfo[0].decode('utf-8'))
                     msg += u'成功' if result_code == 0 else (u'失败: %s' % result_code)
                     self.master.log_frame.show_log(msg)
-                msg = u'"%s"吧发贴完成' % tieba_name
+                msg = u'"%s"吧发贴完成' % tieba_name.decode('utf-8')
                 self.master.log_frame.show_log(msg)
             tkMessageBox.showinfo(u'提示', u'发贴完成')
         except Exception as e:
@@ -517,6 +509,19 @@ class App(Tkinter.Tk):
             self.log_frame.show_log(u'初始化浏览器驱动成功')
             return driver
 
+    def get_tieba_info(self):
+        get_tiebas_url = 'http://tieba.baidu.com/f/like/mylike?v=%s&pn=%s'
+        num = 1
+        tiebainfos = []
+        while True:
+            resp = self.session.get(get_tiebas_url % (int(time.time() * 1000), num))
+            page_source = resp.content.decode('gbk').encode('utf-8')
+            table = re.search(r'<table.*?</table>', page_source, re.DOTALL).group()
+            tiebainfos.extend(re.findall(r'<tr.*?title="(.*?)".*?balvid="(\d*?)".*?tbs="(.*?)".*?</tr>', table, re.DOTALL))
+            if not re.search(r'<a href="/f/like/mylike\?&pn=\d+?">下一页</a>', page_source, re.DOTALL):
+                break
+            num += 1
+        return tiebainfos
 
 app = App()
 app.mainloop()
