@@ -5,6 +5,7 @@ import os
 import re
 import json
 import time
+import copy
 import base64
 import codecs
 import Tkinter
@@ -105,8 +106,7 @@ class LoginFrame(Tkinter.Frame):
                         resp = self.master.session.get(user_info_url % int(time.time() * 1000))
                         self.master.session.headers.pop('X-Requested-With')
                         if resp.content:
-                            self.master.driver_cookies[username] = eval(base64.b64decode(keys[1]))
-                            self.master.cookies[username] = self.master.session.cookies
+                            self.master.cookies[username] = copy.deepcopy(self.master.session.cookies._cookies)
                             login_ok = True
                     except Exception:
                         pass
@@ -123,7 +123,6 @@ class LoginFrame(Tkinter.Frame):
                             config_file = codecs.open(config_file_path, 'w+', 'utf-8')
                             config_file.write(json.dumps(users_info, ensure_ascii=False, indent=4))
                             config_file.close()
-                            self.master.driver_cookies[username] = cookies
                             self.master.session.cookies.clear()
                             for cookie in cookies:
                                 name = cookie.pop('name')
@@ -132,7 +131,7 @@ class LoginFrame(Tkinter.Frame):
                                 cookie['expires'] = None
                                 cookie['rest'] = {'HttpOnly': cookie.pop('httponly', False)}
                                 self.master.session.cookies.set(name, value, **cookie)
-                            self.master.cookies[username] = self.master.session.cookies
+                            self.master.cookies[username] = copy.deepcopy(self.master.session.cookies._cookies)
                             login_ok = True
                     except Exception:
                         raise
@@ -154,7 +153,6 @@ class LoginFrame(Tkinter.Frame):
             self.master.log_frame.pack_forget()
             self.pack()
         self.master.log_frame.backButton.configure(state='normal')
-        config_file.close()
         if has_driver and self.master.driver:
             self.master.driver.quit()
 
@@ -186,7 +184,7 @@ class MainFrame(Tkinter.Frame):
         try:
             for username, cookies in self.master.cookies.items():
                 self.master.log_frame.show_log(u'帐号"%s"正在签到...' % username)
-                self.master.session.cookies = cookies
+                self.master.session.cookies._cookies = cookies
                 resp = self.master.session.get(get_tiebas_url % int(time.time() * 1000))
                 table = re.search(r'<table.*?</table>', resp.content, re.DOTALL).group()
                 tiebainfos = re.findall(r'<tr.*?title="(.*?)".*?tbs="(.*?)".*?</tr>', table, re.DOTALL)
@@ -257,7 +255,7 @@ class FllowFrame(Tkinter.Frame):
         try:
             for username, cookies in self.master.cookies.items():
                 self.master.log_frame.show_log(u'帐号"%s"正在关注...' % username)
-                self.master.session.cookies = cookies
+                self.master.session.cookies._cookies = cookies
                 for tiebaname in tiebanames:
                     resp = self.master.session.get(tieba_url % urlencode({'kw': tiebaname.encode('utf-8')}))
                     resp = self.master.session.get(resp.url)
@@ -383,7 +381,7 @@ class SendFrame(Tkinter.Frame):
             requests_info = {}
             for username, cookies in self.master.cookies.items():
                 self.master.log_frame.show_log(u'获取帐号"%s"贴吧信息...' % username)
-                self.master.session.cookies = cookies
+                self.master.session.cookies._cookies = cookies
                 resp = self.master.session.get(get_tiebas_url % int(time.time() * 1000))
                 table = re.search(r'<table.*?</table>', resp.content, re.DOTALL).group()
                 tiebainfos = re.findall(r'<tr.*?title="(.*?)".*?balvid="(\d*?)".*?tbs="(.*?)".*?</tr>', table, re.DOTALL)
@@ -392,13 +390,13 @@ class SendFrame(Tkinter.Frame):
                     tiebainfo[0] = tiebainfo[0].decode('gbk')
                     if tiebainfo[0] not in requests_info:
                         requests_info[tiebainfo[0]] = []
-                    requests_info[tiebainfo[0]].append([username, cookies, tiebainfo])
+                    requests_info[tiebainfo[0]].append([username, copy.deepcopy(cookies), tiebainfo])
                 self.master.log_frame.show_log(u'获取帐号"%s"贴吧信息完成' % username)
             for tieba_name, request_info in requests_info.items():
                 self.master.log_frame.show_log(u'正在"%s"吧发贴...' % tieba_name)
                 for request in request_info:
                     username, cookies, tiebainfo = request
-                    self.master.session.cookies = cookies
+                    self.master.session.cookies._cookies = cookies
                     send_content = content
                     if img_path:
                         # 上传图片
@@ -487,7 +485,6 @@ class App(Tkinter.Tk):
         self.session = Session()
         self.session.headers.update(self.headers)
         self.cookies = {}
-        self.driver_cookies = {}
         self.cut = '**********************************************************'
 
         self.withdraw()
