@@ -193,7 +193,7 @@ class MainFrame(Tkinter.Frame):
                         if result_code in [0, 1101]:
                             break
                     msg = u'帐号"%s"在"%s"吧签到' % (username, tiebainfo[0].decode('utf-8'))
-                    msg += u'成功' if result_code in [0, 1101, 1102] else (u'失败: %s' % result_code)
+                    msg += u'成功' if result_code in [0, 1101, 1102] else (u'失败: %s' % resp.json().get('data').get('str_reason'))
                     self.master.log_frame.show_log(msg)
                 msg = u'帐号"%s"签到完成' % username
                 self.master.log_frame.show_log(msg)
@@ -243,7 +243,7 @@ class FllowFrame(Tkinter.Frame):
             self.tiebanamesInput.focus()
             return
         tiebanames = tiebanames.replace('\n', ',').split(',')
-        tiebanames = [tiebaname for tiebaname in tiebanames if tiebaname]
+        tiebanames = list(set([tiebaname for tiebaname in tiebanames if tiebaname]))
         tieba_url = 'https://tieba.baidu.com/f?%s'
         fllow_url = 'https://tieba.baidu.com/f/like/commit/add'
         self.pack_forget()
@@ -256,10 +256,13 @@ class FllowFrame(Tkinter.Frame):
                 for tiebaname in tiebanames:
                     resp = self.master.session.get(tieba_url % urlencode({'kw': tiebaname.encode('utf-8')}))
                     resp = self.master.session.get(resp.url)
-                    real_name = re.search(r'PageData\.forum.*?name[\'"]:.*?"(.*?)"', resp.content, re.DOTALL).group(1)
-                    real_name = eval('u\'%s\'' % real_name)
-                    if real_name != tiebaname:
-                        tiebanames.pop(tiebaname)
+                    real_name = re.search(r'PageData\.forum.*?name[\'"]:.*?"(.*?)"', resp.content, re.DOTALL)
+                    try:
+                        real_name = eval('u\'%s\'' % real_name.group(1))
+                    except Exception:
+                        pass
+                    if not real_name or real_name != tiebaname:
+                        tiebanames.remove(tiebaname)
                         msg = u'"%s"吧不存在' % tiebaname
                         self.master.log_frame.show_log(msg)
                         continue
@@ -431,7 +434,7 @@ class SendFrame(Tkinter.Frame):
                         if result_code == 0:
                             break
                     msg = u'帐号"%s"在"%s"吧发贴' % (username, tiebainfo[0].decode('utf-8'))
-                    msg += u'成功' if result_code == 0 else (u'失败: %s' % result_code)
+                    msg += u'成功' if result_code == 0 else (u'失败: %s %s' % (result_code, resp.json().get('data').get('autoMsg')))
                     self.master.log_frame.show_log(msg)
                 msg = u'"%s"吧发贴完成' % tieba_name.decode('utf-8')
                 self.master.log_frame.show_log(msg)
