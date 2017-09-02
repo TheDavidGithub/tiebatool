@@ -363,17 +363,42 @@ class SendFrame(Tkinter.Frame):
         img_tab = '[img pic_type=0 width=%s height=%s]%s[/img]'
         add_url = 'https://tieba.baidu.com/f/commit/thread/add'
         mouse_pwd = '82,83,82,77,80,85,85,83,104,80,77,81,77,80,77,81,77,80,77,81,77,80,77,81,77,80,77,81,104,87,88,86,82,87,104,80,82,87,87,77,86,87,89,%s0'
+        bsk = '''JVwVUWcLBBpwRQdsUnVCAl5LZyBuB08VTT0CQyZdFSk/RDgKQCA3URZSPj8BXgYaPUcvGBEgXSlyHw0GN0UI
+        SCobVTYTIVpAGAgoJy4JBUVXIxMKN1A3JTRDJC5dICkcAVoyOSJfSwQsBDxVEDNdKx8QCA4kRU1EKzNBPgwpWkIPFjAyK
+        VE8U1IoJEcpWSQxMlt8DFInJxgZejk7AW5LBSVKPlcVfFsmLgoUESB0Uk4rAUBzEykaVQsUIBIsQBtDTWEAQzF2KT0hRS
+        QKVxowBBlWcToFWUkBBE07XR98VSgoGzUMaVxLXSA3SnMTKQVZEAIROHZXEERXNwJkPBkhNSVjNQNWKjAUGl1/e0ZZG0t
+        zCjlBEDNMLjEQQRcqYlBZLBtUd0hsDRAxCSQjM1MQF10iA0MYFTtyfRI+XBFzZE9FAmpnURwbRWtYbBZEcF4mMg0ET2dQ
+        Fgl/VQRrVWBUU1tFf3cuVwBSEm8QFGcPZB4EfBxNH2spTFcJfzUFXkMFIFs0ax8cTnc0GUNPZ18WCX9VAW9Qe0YFW1Zpd
+        SoXVw0cAQ5IME1mKGkGD1kHa2hfGQJ/bUZXQkQKZn0YXDwKZWReFREwVAgJIEQRZUF+RgFdV3BmawlXQA1vXQYjVCojNB
+        xyGgJrfl84XCc+CEFLRnwGbxRWCAl2ZV4tCitEXAs9TQUAV3hfECsXNTs/chBVdSQTCXAGcX5iBnBHeAEQMDkffTsNRk9
+        JDk08XxF5GAQ2DA4OIB4RHWtFHW1YfkIeUlBlBDtDFEVXYlIVcht1ZnMcchwBa35dRABrYUgPWlhrEn0RSRIddWwKAxBg
+        AxYOdjQWbVN5RlJeXidgOUAWBV0sBUAkBHNgZQNjVgBwdlhHAXhgIA8GSygcfQ5eNlkrLRtNQTIABhFnO2YTLW5aEhlUZ
+        216UQdCW2FFSHQXfHBjAGFYA3x1TFkRPGRGFwoPKEQsUVJySnZ8REMFMF9HXywaXX8TLRhUBQptfnpeVWxQLBNPM1BmMz
+        5UNTITNGZRV1psdV4NXhs8TXMWH2EafX5PUlVzHQZYdFcJf1Z6ThxIA3R1YAc7YnIBRVs='''
+        bsk = bsk.replace('\n', '').replace(' ', '')
         self.pack_forget()
         self.master.log_frame.pack()
         self.master.log_frame.show_log(self.master.cut)
         try:
+            requests_info = {}
             for username, cookies in self.master.cookies.items():
-                self.master.log_frame.show_log(u'帐号"%s"正在发贴...' % username)
+                self.master.log_frame.show_log(u'获取帐号"%s"贴吧信息...' % username)
                 self.master.session.cookies = cookies
                 resp = self.master.session.get(get_tiebas_url % int(time.time() * 1000))
                 table = re.search(r'<table.*?</table>', resp.content, re.DOTALL).group()
                 tiebainfos = re.findall(r'<tr.*?title="(.*?)".*?balvid="(\d*?)".*?tbs="(.*?)".*?</tr>', table, re.DOTALL)
                 for tiebainfo in tiebainfos:
+                    tiebainfo = list(tiebainfo)
+                    tiebainfo[0] = tiebainfo[0].decode('gbk')
+                    if tiebainfo[0] not in requests_info:
+                        requests_info[tiebainfo[0]] = []
+                    requests_info[tiebainfo[0]].append([username, cookies, tiebainfo])
+                self.master.log_frame.show_log(u'获取帐号"%s"贴吧信息完成' % username)
+            for tieba_name, request_info in requests_info.items():
+                self.master.log_frame.show_log(u'正在"%s"吧发贴...' % tieba_name)
+                for request in request_info:
+                    username, cookies, tiebainfo = request
+                    self.master.session.cookies = cookies
                     send_content = content
                     if img_path:
                         # 上传图片
@@ -405,20 +430,20 @@ class SendFrame(Tkinter.Frame):
                         send_content = send_content.replace('[img]', img_tab % (width, height, image_url))
                     time_stamp = str(int(time.time() * 1000))
                     data = {
-                        'ie': 'utf-8', 'kw': tiebainfo[0].decode('gbk').encode('utf-8'), 'fid': tiebainfo[1],
-                        'tid': '0', 'vcode_md5': '', 'floor_num': '0', 'rich_text': '1', 'tbs': tiebainfo[2],
+                        'ie': 'utf-8', 'kw': tiebainfo[0].encode('utf-8'), 'fid': tiebainfo[1], 'tid': '0',
+                        'vcode_md5': '', 'floor_num': '0', 'rich_text': '1', 'tbs': tiebainfo[2], 'prefix': '',
                         'content': send_content.encode('utf-8'), 'basilisk': '1', 'title': title.encode('utf-8'),
-                        'prefix': '', 'files': '[]', 'mouse_pwd': mouse_pwd % time_stamp, 'mouse_pwd_t': time_stamp,
-                        'mouse_pwd_isclick': '0', '__type__': 'thread'}
+                        'files': '[]', 'mouse_pwd': mouse_pwd % time_stamp, 'mouse_pwd_t': time_stamp,
+                        'mouse_pwd_isclick': '0', '__type__': 'thread', '_BSK': bsk}
                     for i in range(3):
                         resp = self.master.session.post(add_url, data=urlencode(data))
                         result_code = resp.json().get('no')
                         if result_code == 0:
                             break
-                    msg = u'帐号"%s"在"%s"吧发贴' % (username, tiebainfo[0].decode('gbk'))
+                    msg = u'帐号"%s"在"%s"吧发贴' % (username, tiebainfo[0])
                     msg += u'成功' if result_code == 0 else (u'失败: %s' % result_code)
                     self.master.log_frame.show_log(msg)
-                msg = u'帐号"%s"发贴完成' % username
+                msg = u'"%s"吧发贴完成' % tieba_name
                 self.master.log_frame.show_log(msg)
             tkMessageBox.showinfo(u'提示', u'发贴完成')
         except Exception as e:
