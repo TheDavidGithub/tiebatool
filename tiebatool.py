@@ -356,36 +356,25 @@ class SendFrame(Tkinter.Frame):
                 tkMessageBox.showinfo(u'提示', u'仅支持jpg, png, gif类型的图片')
                 self.tieziimageInput.focus()
                 return
-        content = ''.join(['<p>%s</p>' % the_content for the_content in content.split('\n')])
+        content = content.replace('\n', '[br]')
         get_tiebas_url = 'http://tieba.baidu.com/f/like/mylike?v=%s'
         img_tbs_url = 'https://tieba.baidu.com/dc/common/imgtbs'
         upload_image = 'https://uploadphotos.baidu.com/upload/pic?%s'
-        img_tab = '<img pic_type="1" src="%s" class="BDE_Image" onload="EditorUI.resizeImage(this, %s)" unselectable="on" height="%s" width="%s">'
-        tieba_url = 'https://tieba.baidu.com/f?%s'
+        img_tab = '[img pic_type=0 width=%s height=%s]%s[/img]'
+        add_url = 'https://tieba.baidu.com/f/commit/thread/add'
+        mouse_pwd = '82,83,82,77,80,85,85,83,104,80,77,81,77,80,77,81,77,80,77,81,77,80,77,81,77,80,77,81,104,87,88,86,82,87,104,80,82,87,87,77,86,87,89,%s0'
         self.pack_forget()
         self.master.log_frame.pack()
         self.master.log_frame.show_log(self.master.cut)
         try:
-            self.master.driver = self.master.get_driver_by_phantomjs()
-            if not self.master.driver:
-                self.master.log_frame.pack_forget()
-                self.pack()
-                return
-            self.master.driver.get('https://tieba.baidu.com/index.html')
             for username, cookies in self.master.cookies.items():
                 self.master.log_frame.show_log(u'帐号"%s"正在发贴...' % username)
                 self.master.session.cookies = cookies
-                self.master.driver.delete_all_cookies()
-                for cookie in self.master.driver_cookies.get(username):
-                    self.master.driver.add_cookie(cookie)
                 resp = self.master.session.get(get_tiebas_url % int(time.time() * 1000))
                 table = re.search(r'<table.*?</table>', resp.content, re.DOTALL).group()
                 tiebainfos = re.findall(r'<tr.*?title="(.*?)".*?balvid="(\d*?)".*?tbs="(.*?)".*?</tr>', table, re.DOTALL)
                 for tiebainfo in tiebainfos:
                     send_content = content
-                    self.master.driver.get(tieba_url % urlencode({'kw': tiebainfo[0].decode('gbk').encode('utf-8')}))
-                    while not self.master.driver.find_elements_by_css_selector('#com_userbar_message'):
-                        time.sleep(0.1)
                     if img_path:
                         # 上传图片
                         self.master.session.headers.update({'X-Requested-With': 'XMLHttpRequest'})
@@ -405,32 +394,35 @@ class SendFrame(Tkinter.Frame):
                         image_json = resp.json()
                         image_id = image_json.get('info').get('pic_id_encode')
                         image_type = image_json.get('info').get('pic_water').split('.')[-1]
-                        height = image_json.get('fullpic_height')
-                        width = image_json.get('fullpic_width')
+                        height = image_json.get('info').get('fullpic_height')
+                        width = image_json.get('info').get('fullpic_width')
                         if width > 560:
                             height = int(float(height) / width * 560)
                             width = 560
                         image_url = 'https://imgsa.baidu.com/forum/pic/item/%s.%s' % (image_id, image_type)
 
                         # 生成图片标签
-                        send_content = send_content.replace('[img]', img_tab * (image_url, width, height, width))
-                    title_input = self.master.driver.find_element_by_css_selector('input.editor_title')
-                    content_input = self.master.driver.find_element_by_css_selector('div.edui-editor-body')
-                    send_buttom = self.master.driver.find_element_by_css_selector('buttom.poster_submit')
-                    title_input.click()
-                    title_input.send_keys(title)
-                    content_input.click()
-                    self.master.driver.execute_script('$("#ueditor_replace").html("%s")' % send_content)
-                    send_buttom.click()
-                    msg = u'帐号"%s"在"%s"吧发贴完成' % (username, tiebainfo[0].decode('gbk'))
+                        send_content = send_content.replace('[img]', img_tab % (width, height, image_url))
+                    time_stamp = str(int(time.time() * 1000))
+                    data = {
+                        'ie': 'utf-8', 'kw': tiebainfo[0].decode('gbk').encode('utf-8'), 'fid': tiebainfo[1],
+                        'tid': '0', 'vcode_md5': '', 'floor_num': '0', 'rich_text': '1', 'tbs': tiebainfo[2],
+                        'content': send_content.encode('utf-8'), 'basilisk': '1', 'title': title.encode('utf-8'),
+                        'prefix': '', 'files': '[]', 'mouse_pwd': mouse_pwd % time_stamp, 'mouse_pwd_t': time_stamp,
+                        'mouse_pwd_isclick': '0', '__type__': 'thread'}
+                    for i in range(3):
+                        resp = self.master.session.post(add_url, data=urlencode(data))
+                        result_code = resp.json().get('no')
+                        if result_code == 0:
+                            break
+                    msg = u'帐号"%s"在"%s"吧发贴' % (username, tiebainfo[0].decode('gbk'))
+                    msg += u'成功' if result_code == 0 else (u'失败: %s' % result_code)
                     self.master.log_frame.show_log(msg)
-                    break
                 msg = u'帐号"%s"发贴完成' % username
                 self.master.log_frame.show_log(msg)
             tkMessageBox.showinfo(u'提示', u'发贴完成')
         except Exception as e:
             tkMessageBox.showinfo(u'提示', u'发贴失败：%s' % traceback.format_exc(e))
-        self.master.driver.quit()
         self.pack()
 
 
