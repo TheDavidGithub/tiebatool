@@ -3,6 +3,7 @@
 
 import os
 import re
+import sys
 import json
 import time
 import copy
@@ -15,6 +16,7 @@ import tkMessageBox
 from urllib import urlencode
 from requests import Session
 from selenium import webdriver
+import platform
 
 try:
     from tkinter import scrolledtext
@@ -46,14 +48,21 @@ class LoginFrame(Tkinter.Frame):
         username_input = self.master.driver.find_element_by_xpath('//input[@id="TANGRAM__PSP_10__userName"]')
         password_input = self.master.driver.find_element_by_xpath('//input[@id="TANGRAM__PSP_10__password"]')
         login_input = self.master.driver.find_element_by_xpath('//input[@id="TANGRAM__PSP_10__submit"]')
-        username_input.send_keys(user)
-        password_input.send_keys(password)
+        for i in range(3):
+            try:
+                username_input.clear()
+                username_input.send_keys(user)
+                password_input.clear()
+                password_input.send_keys(password)
+                break
+            except Exception:
+                time.sleep(0.1)
         for i in range(3):
             try:
                 login_input.click()
                 break
             except Exception:
-                pass
+                time.sleep(0.1)
         if self.master.driver.get_cookie('BDUSS'):
             for i in range(100):
                 if self.master.driver.get_cookie('STOKEN'):
@@ -67,19 +76,19 @@ class LoginFrame(Tkinter.Frame):
 
     def login(self):
         config_file_path = os.path.join(os.path.abspath(os.path.curdir), 'users_info.json')
-        config_file = open(config_file_path, 'r')
         if not os.path.exists(config_file_path):
             tkMessageBox.showinfo(u'提示', u'请在程序运行目录下创建配置文件"users_info.json"')
             return
         try:
+            config_file = open(config_file_path, 'r')
             users_info = json.load(config_file)
+            config_file.close()
             if not users_info:
                 tkMessageBox.showinfo(u'提示', u'用户信息不存在')
                 return
         except Exception:
             tkMessageBox.showinfo(u'提示', u'配置文件异常，请检查修复')
             return
-        config_file.close()
         self.master.log_frame.backButton.configure(state='disabled')
         self.pack_forget()
         self.master.log_frame.pack()
@@ -215,7 +224,9 @@ class FllowFrame(Tkinter.Frame):
         Tkinter.Frame.__init__(self, master)
         Tkinter.Label(self, text=u"以英文逗号或换行分隔的贴吧名称：").grid(
             row=0, column=0, columnspan=2, padx=3, pady=3, sticky='W')
-        self.tiebanamesInput = scrolledtext.ScrolledText(self, width=69, height=18)
+        width = 69 if platform.system() == 'Linux' else 66
+        height = 18 if platform.system() == 'Linux' else 23
+        self.tiebanamesInput = scrolledtext.ScrolledText(self, width=width, height=height)
         self.tiebanamesInput.bind("<Control-Key-a>", self.selecttext)
         self.tiebanamesInput.bind("<Control-Key-A>", self.selecttext)
         self.tiebanamesInput.grid(row=1, column=0, columnspan=2, padx=3, pady=3, sticky='W')
@@ -290,21 +301,23 @@ class SendFrame(Tkinter.Frame):
     def __init__(self, master=None):
         Tkinter.Frame.__init__(self, master)
 
+        width = 60 if platform.system() == 'Linux' else 57
         Tkinter.Label(self, text=u"图片路径：").grid(row=0, column=0, pady=3, sticky='E')
-        self.tieziimageInput = Tkinter.Entry(self, width=60)
+        self.tieziimageInput = Tkinter.Entry(self, width=width)
         self.tieziimageInput.bind("<Control-Key-a>", self.selectpath)
         self.tieziimageInput.bind("<Control-Key-A>", self.selectpath)
         self.tieziimageInput.grid(row=0, column=1, columnspan=2, pady=3, sticky='W')
         self.tieziimageInput.focus()
 
         Tkinter.Label(self, text=u"帖子标题：").grid(row=1, column=0, pady=2, sticky='E')
-        self.tieziitieleInput = Tkinter.Entry(self, width=60)
+        self.tieziitieleInput = Tkinter.Entry(self, width=width)
         self.tieziitieleInput.bind("<Control-Key-a>", self.selecttitle)
         self.tieziitieleInput.bind("<Control-Key-A>", self.selecttitle)
         self.tieziitieleInput.grid(row=1, column=1, columnspan=2, pady=3, sticky='W')
 
         Tkinter.Label(self, text=u"帖子内容：").grid(row=2, column=0, pady=3, sticky='E')
-        self.tiezicontentInput = scrolledtext.ScrolledText(self, width=60, height=16)
+        height = 16 if platform.system() == 'Linux' else 21
+        self.tiezicontentInput = scrolledtext.ScrolledText(self, width=width, height=height)
         self.tiezicontentInput.bind("<Control-Key-a>", self.selecttext)
         self.tiezicontentInput.bind("<Control-Key-A>", self.selecttext)
         self.tiezicontentInput.grid(row=2, column=1, columnspan=2, pady=3, sticky='W')
@@ -447,7 +460,9 @@ class SendFrame(Tkinter.Frame):
 class LogFrame(Tkinter.Frame):
     def __init__(self, master=None):
         Tkinter.Frame.__init__(self, master)
-        self.text = scrolledtext.ScrolledText(self, width=69, height=20)
+        width = 69 if platform.system() == 'Linux' else 66
+        height = 20 if platform.system() == 'Linux' else 25
+        self.text = scrolledtext.ScrolledText(self, width=width, height=height)
         self.text.grid(row=0, column=0, pady=3, sticky='E')
         self.backButton = Tkinter.Button(self, text=u'返回', command=self.back)
         self.backButton.grid(row=1, column=0, pady=3)
@@ -496,21 +511,31 @@ class App(Tkinter.Tk):
         self.deiconify()
 
     def get_driver_by_phantomjs(self):
-            self.log_frame.show_log(u'初始化浏览器驱动...')
-            desired_capabilities = {'phantomjs.page.settings.loadImages': False,
-                                    'phantomjs.page.settings.userAgent': self.headers.get('User-Agent')}
-            for i in range(3):
-                try:
-                    driver = webdriver.PhantomJS(desired_capabilities=desired_capabilities,
-                                                 service_log_path='/dev/null')
-                    break
-                except Exception:
-                    pass
-                if i == 2:
-                    tkMessageBox.showinfo(u'提示', u'初始化浏览器驱动失败')
-                    return
-            self.log_frame.show_log(u'初始化浏览器驱动成功')
-            return driver
+        self.log_frame.show_log(u'初始化浏览器驱动...')
+        desired_capabilities = {'phantomjs.page.settings.loadImages': False,
+                                'phantomjs.page.settings.userAgent': self.headers.get('User-Agent')}
+        if platform.system() == 'Linux':
+            executable_path = 'phantomjs'
+            log_path = '/dev/null'
+        elif platform.system() == 'Windows':
+            if hasattr(sys, '_MEIPASS'):
+                base_path = sys._MEIPASS
+            else:
+                base_path = os.path.abspath('.')
+            executable_path = os.path.join(base_path, 'phantomjs.exe')
+            log_path = 'nul'
+        for i in range(3):
+            try:
+                driver = webdriver.PhantomJS(executable_path=executable_path, service_log_path=log_path,
+                                             desired_capabilities=desired_capabilities)
+                break
+            except Exception as e:
+                pass
+            if i == 2:
+                tkMessageBox.showinfo(u'提示', u'初始化浏览器驱动失败: %s' % traceback.format_exc(e))
+                return
+        self.log_frame.show_log(u'初始化浏览器驱动成功')
+        return driver
 
     def get_tieba_info(self):
         get_tiebas_url = 'http://tieba.baidu.com/f/like/mylike?v=%s&pn=%s'
